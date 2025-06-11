@@ -1,6 +1,15 @@
 // Feedback Status Types
 export type Status = 'Under Review' | 'In Progress' | 'Completed' | 'Declined'
 
+// AI Processing Status Types
+export type AiProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+// Automation Task Types
+export type AutomationTaskType = 'ai_tagging' | 'insight_generation' | 'sheets_export'
+
+// Automation Status Types
+export type AutomationStatus = 'running' | 'completed' | 'failed'
+
 // Category Types
 export type Category = 'BackOffice' | 'POS' | 'Beep'
 
@@ -30,6 +39,63 @@ export interface Feedback {
   category: Category
   subCategory?: SubCategory
   votedBy?: string[]
+  // AI automation fields
+  aiTaggedAt?: string
+  aiProcessingStatus: AiProcessingStatus
+}
+
+// AI Automation Types
+export interface AiInsight {
+  id: string
+  theme: string
+  insightSummary: string
+  priorityScore: number // 1-10
+  feedbackCount: number
+  sampleFeedbackIds: string[] // Array of feedback IDs
+  generatedAt: string
+  exportedAt?: string
+}
+
+export interface AutomationLog {
+  id: string
+  taskType: AutomationTaskType
+  status: AutomationStatus
+  startedAt: string
+  completedAt?: string
+  itemsProcessed: number
+  errorMessage?: string
+  triggeredBy: 'auto' | 'manual' | 'admin'
+}
+
+// AI Integration Types
+export interface TagGenerationResult {
+  tags: string[]
+  confidence: number
+}
+
+export interface InsightGenerationResult {
+  theme: string
+  insight: string
+  priority: number
+  sampleIds: string[]
+}
+
+export interface AutomationStatusSummary {
+  aiTagging: {
+    lastRun?: string
+    status: AutomationStatus
+    itemsProcessed: number
+  }
+  insights: {
+    lastRun?: string
+    status: AutomationStatus
+    insightsGenerated: number
+  }
+  export: {
+    lastRun?: string
+    status: AutomationStatus
+    rowsExported: number
+  }
 }
 
 // API Response Types
@@ -53,6 +119,21 @@ export interface VoteResponse extends ApiResponse {
     id: string
     votes: number
     voted: boolean
+  }
+}
+
+export interface AutomationResponse extends ApiResponse {
+  data?: AutomationStatusSummary
+}
+
+export interface AutomationTriggerResponse extends ApiResponse {
+  data?: {
+    processed?: number
+    failed?: number
+    insights?: number
+    themes?: number
+    feedbackRows?: number
+    insightRows?: number
   }
 }
 
@@ -120,6 +201,7 @@ export interface DashboardStats {
   pendingCount: number
   totalFeedback: number
   topVotedFeedback: Feedback[]
+  automationStatus: AutomationStatusSummary
 }
 
 // Moderation Types
@@ -147,6 +229,16 @@ export interface SheetsRow {
   moderatedBy: string
   adminNotes: string
   tags: string
+  aiTaggedAt: string
+}
+
+export interface InsightsSheetsRow {
+  theme: string
+  insightSummary: string
+  priorityScore: string
+  feedbackCount: string
+  sampleFeedbackIds: string
+  generatedAt: string
 }
 
 // Rate Limiting Types

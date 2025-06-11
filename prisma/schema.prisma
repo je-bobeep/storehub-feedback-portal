@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -34,6 +34,10 @@ model Feedback {
   category    String
   subCategory String?
   
+  // AI Automation fields
+  aiTaggedAt           DateTime? @map("ai_tagged_at")
+  aiProcessingStatus   String    @default("pending") @map("ai_processing_status") // pending, processing, completed, failed
+  
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -49,11 +53,6 @@ model Feedback {
   submitter     User?   @relation(fields: [submittedBy], references: [id])
   userVotes     Vote[]
   
-  // Indexes for performance
-  @@index([status])
-  @@index([votes])
-  @@index([createdAt])
-  @@index([isApproved])
   @@map("feedback")
 }
 
@@ -78,7 +77,31 @@ model AdminSession {
   expiresAt DateTime
   createdAt DateTime @default(now())
   
-  @@index([token])
-  @@index([expiresAt])
   @@map("admin_sessions")
+}
+
+model AiInsight {
+  id                String   @id @default(cuid())
+  theme             String   // Primary tag/theme
+  insightSummary    String   @map("insight_summary")
+  priorityScore     Int      @default(1) @map("priority_score") // 1-10
+  feedbackCount     Int      @default(0) @map("feedback_count")
+  sampleFeedbackIds String?  @map("sample_feedback_ids") // JSON array: ["id1","id2"]
+  generatedAt       DateTime @default(now()) @map("generated_at")
+  exportedAt        DateTime? @map("exported_at")
+  
+  @@map("ai_insights")
+}
+
+model AutomationLog {
+  id              String    @id @default(cuid())
+  taskType        String    @map("task_type") // ai_tagging, insight_generation, sheets_export
+  status          String    // running, completed, failed
+  startedAt       DateTime  @default(now()) @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  itemsProcessed  Int       @default(0) @map("items_processed")
+  errorMessage    String?   @map("error_message")
+  triggeredBy     String    @default("auto") @map("triggered_by") // auto, manual, admin
+  
+  @@map("automation_logs")
 }

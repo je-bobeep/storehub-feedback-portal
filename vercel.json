@@ -7,9 +7,23 @@
   "regions": ["iad1"],
   "functions": {
     "app/api/**/*.ts": {
-      "maxDuration": 10
+      "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/ai-tagging",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-insights", 
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/export-sheets",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

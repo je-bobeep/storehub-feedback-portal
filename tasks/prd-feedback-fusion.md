@@ -6,15 +6,16 @@ Feedback Fusion is a full-stack application designed to revolutionize how teams 
 
 **Problem Statement**: Current feedback management is fragmented, requiring manual categorization and analysis, making it difficult to identify patterns and prioritize feature development based on user needs. Additionally, using spreadsheets as primary databases creates performance bottlenecks and poor user experience.
 
-**Solution**: An integrated platform with a proper database backend that streamlines feedback collection and intelligent automation to transform raw feedback into strategic insights exported to Google Sheets for easy consumption by product teams. **Phase 1 focuses on core automation and AI-powered insights; admin interface will be added in future iterations.**
+**Solution**: An integrated platform with a proper database backend that streamlines feedback collection and **built-in intelligent automation** to transform raw feedback into strategic insights exported to Google Sheets for easy consumption by product teams. **All AI processing and automation is handled directly within the application - no external workflow tools required.**
 
 ## Goals
 
 1. **Streamline Feedback Collection**: Provide a simple, intuitive interface for users to submit feature requests and feedback with fast response times
 2. **Enable Democratic Prioritization**: Allow users to upvote feedback without barriers, creating organic prioritization with real-time updates  
-3. **Automate Intelligence Generation**: Use AI to automatically categorize feedback and generate actionable insights
+3. **Automate Intelligence Generation**: Use built-in AI to automatically categorize feedback and generate actionable insights
 4. **Deliver Strategic Value**: Transform scattered feedback into clustered themes with synthesized recommendations exported to Google Sheets for product team consumption
-5. **Future: Efficient Moderation**: Admin tools for feedback management will be added in subsequent iterations
+5. **Maintain System Simplicity**: All automation runs within the application itself - no external dependencies or complex configurations
+6. **Future: Efficient Moderation**: Admin tools for feedback management will be added in subsequent iterations
 
 ## User Stories
 
@@ -33,6 +34,8 @@ Feedback Fusion is a full-stack application designed to revolutionize how teams 
 ### System Intelligence
 - **As a product owner**, I want the system to automatically tag feedback with relevant categories so that patterns emerge without manual work
 - **As a product owner**, I want the system to generate insights by clustering similar feedback so that I understand major themes and priorities
+- **As a product owner**, I want all AI processing to happen automatically within the application so that I don't need to manage external tools
+- **As an admin**, I want to manually trigger AI analysis and exports when needed so that I have control over the timing
 
 ## Functional Requirements
 
@@ -94,28 +97,35 @@ Feedback Fusion is a full-stack application designed to revolutionize how teams 
    - Must implement proper database indexing for vote counts and status queries
    - Must provide database migration scripts for schema updates
 
-10. **Google Sheets Export Integration**
+10. **Built-in AI Automation System**
+    - Must integrate Gemini AI API directly into the application codebase
+    - Must automatically tag untagged approved feedback on configurable schedule (default: every 15 minutes)
+    - Must send title and description to Gemini API for tag generation
+    - Must generate relevant tags array (e.g., ["UI/UX", "Bug", "Feature Request", "Performance"])
+    - Must write generated tags back to database immediately
+    - Must handle API rate limiting and errors gracefully with retry logic
+
+11. **Built-in Insight Generation System**
+    - Must analyze all tagged feedback and generate insights on configurable schedule (default: daily)
+    - Must group feedback by AI-generated tags using database queries
+    - Must use Gemini AI to generate one-sentence actionable insights for each major theme
+    - Must calculate priority scores based on vote counts and frequency
+    - Must store insights in database with timestamps and sample feedback references
+
+12. **Google Sheets Export Integration**
     - Must export feedback data to Google Sheets on configurable schedule (default: daily)
     - Must include all approved feedback with current vote counts and tags
+    - Must export generated insights to separate "AI_Insights" tab
     - Must maintain Google Sheets as read-only analysis destination
     - Must handle Google Sheets API rate limiting gracefully
-    - Must provide manual export trigger for admins
+    - Must provide manual export trigger for admins via admin interface
 
-11. **AI-Powered Tagging Workflow**
-    - Must query database for untagged approved feedback
-    - Must run on configurable schedule (default: every 15 minutes)
-    - Must send title and description to configured LLM API
-    - Must generate relevant tags array (e.g., ["UI/UX", "Bug", "Feature Request", "Performance"])
-    - Must write generated tags back to database
-    - Must export updated tags to Google Sheets on next scheduled export
-
-12. **Insight Synthesis Workflow**
-    - Must query database for all tagged feedback
-    - Must run on configurable schedule (default: daily)
-    - Must group feedback by AI-generated tags using database queries
-    - Must generate one-sentence actionable insights for each major theme
-    - Must write insights directly to Google Sheets "AI_Insights" tab
-    - Must include sample feedback IDs for each insight
+13. **Admin Automation Controls**
+    - Must provide admin interface to view automation status and logs
+    - Must allow manual triggering of AI tagging, insight generation, and exports
+    - Must display last run timestamps and success/failure status
+    - Must provide configuration options for automation schedules
+    - Must show AI processing queue and progress indicators
 
 ## Non-Goals (Out of Scope)
 
@@ -153,9 +163,9 @@ Feedback Fusion is a full-stack application designed to revolutionize how teams 
 - **Frontend**: Next.js 14+ with TypeScript
 - **Styling**: Tailwind CSS
 - **Database**: SQLite (development/simple deployment) or PostgreSQL (production scale)
-- **Automation**: n8n workflows
-- **Deployment**: Vercel (frontend) + database hosting
-- **AI Integration**: Configurable LLM API (OpenAI, Claude, etc.)
+- **AI Integration**: Google Gemini AI API (built-in automation)
+- **Background Tasks**: Vercel Cron Functions or internal task queue
+- **Deployment**: Vercel (frontend + serverless functions) + database hosting
 - **Data Export**: Google Sheets (for product team analysis)
 
 ### Database Schema
@@ -171,12 +181,41 @@ CREATE TABLE feedback (
   votes INTEGER DEFAULT 0,
   voted_by TEXT, -- JSON array of user emails
   tags TEXT, -- JSON array of AI-generated tags
+  ai_tagged_at TIMESTAMP, -- When AI tagging was completed
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   approved_at TIMESTAMP,
   moderated_by VARCHAR(100),
   admin_notes TEXT,
   is_approved BOOLEAN DEFAULT FALSE
+);
+```
+
+**Table: ai_insights**
+```sql
+CREATE TABLE ai_insights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  theme VARCHAR(100) NOT NULL,
+  insight_summary TEXT NOT NULL,
+  priority_score INTEGER DEFAULT 1,
+  feedback_count INTEGER DEFAULT 0,
+  sample_feedback_ids TEXT, -- JSON array of feedback IDs
+  generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  exported_at TIMESTAMP
+);
+```
+
+**Table: automation_logs**
+```sql
+CREATE TABLE automation_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_type VARCHAR(50) NOT NULL, -- 'ai_tagging', 'insight_generation', 'sheets_export'
+  status VARCHAR(20) NOT NULL, -- 'running', 'completed', 'failed'
+  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP,
+  items_processed INTEGER DEFAULT 0,
+  error_message TEXT,
+  triggered_by VARCHAR(50) DEFAULT 'auto' -- 'auto', 'manual', 'admin_user'
 );
 ```
 
@@ -200,33 +239,6 @@ CREATE TABLE admin_sessions (
 );
 ```
 
-**Google Sheets Export Schema (Analysis Destination):**
-**Sheet: "Feedback_Analysis"**
-```
-Columns:
-- A: Export_Date (ISO timestamp)
-- B: ID (from database)
-- C: Title
-- D: Description
-- E: Status
-- F: Votes
-- G: Tags (JSON array as string)
-- H: Created_Date
-- I: Approved_Date
-- J: Admin_Notes
-```
-
-**Sheet: "AI_Insights"**
-```
-Columns:
-- A: Generated_Date (ISO timestamp)
-- B: Theme/Tag (string)
-- C: Item_Count (number)
-- D: Insight_Summary (text)
-- E: Priority_Score (number, 1-10)
-- F: Sample_Feedback_IDs (comma-separated)
-```
-
 ### API Routes Structure
 ```
 /api/feedback
@@ -247,68 +259,73 @@ Columns:
 
 /api/votes
   - POST: Increment/toggle vote count in database
+
+/api/admin/automation
+  - GET: Retrieve automation status and logs
+  - POST: Manually trigger AI tasks (tagging, insights, export)
+
+/api/cron/ai-tagging
+  - POST: Scheduled AI tagging endpoint (Vercel Cron)
+
+/api/cron/generate-insights
+  - POST: Scheduled insight generation endpoint (Vercel Cron)
+
+/api/cron/export-sheets
+  - POST: Scheduled Google Sheets export endpoint (Vercel Cron)
 ```
 
-## n8n Workflow Setup Tasks (Product Owner Action Items)
+## Built-in Automation Implementation
 
-### Prerequisite Setup
-1. **Create n8n Account**: Sign up for n8n cloud or set up self-hosted instance
-2. **Configure Database Access**:
-   - Set up database connection credentials in n8n
-   - Test database connectivity
-3. **Configure Google Sheets Access**:
-   - Create Google Cloud Project
-   - Enable Google Sheets API
-   - Create service account with Sheets access
-   - Download service account JSON credentials
-4. **Set up LLM API Access**: Obtain API key for chosen LLM provider
+### AI Tagging Process
+1. **Scheduled Trigger**: Vercel Cron runs every 15 minutes
+2. **Database Query**: Find approved feedback where `ai_tagged_at IS NULL`
+3. **Gemini AI Call**: Send title + description for tag generation
+4. **Tag Processing**: Parse response and validate tags
+5. **Database Update**: Store tags and timestamp
+6. **Logging**: Record processing results in automation_logs
 
-### Workflow 1: AI Tagging Automation
-1. **Create New Workflow** named "Feedback-AI-Tagging"
-2. **Add Schedule Trigger** (15 minutes interval)
-3. **Add Database Query Node**:
-   - Query for approved feedback where tags IS NULL
-   - SELECT id, title, description FROM feedback WHERE is_approved = TRUE AND tags IS NULL
-4. **Add HTTP Request Node (LLM API)** for each untagged item
-5. **Add Database Update Node**:
-   - UPDATE feedback SET tags = ? WHERE id = ?
-6. **Test and Activate Workflow**
+### Insight Generation Process
+1. **Scheduled Trigger**: Vercel Cron runs daily
+2. **Data Aggregation**: Group feedback by tags, calculate vote totals
+3. **Gemini AI Analysis**: Send aggregated data for insight generation
+4. **Insight Processing**: Parse insights and priority scores
+5. **Database Storage**: Store insights in ai_insights table
+6. **Logging**: Record generation results
 
-### Workflow 2: Data Export to Google Sheets
-1. **Create New Workflow** named "Database-to-Sheets-Export"
-2. **Add Schedule Trigger** (daily)
-3. **Add Database Query Node**:
-   - SELECT all approved feedback with current data
-4. **Add Google Sheets Node (Clear and Write)**:
-   - Clear existing data in "Feedback_Analysis" sheet
-   - Write fresh export with current data
-5. **Test and Activate Workflow**
+### Google Sheets Export Process
+1. **Scheduled Trigger**: Vercel Cron runs daily (after insights)
+2. **Data Collection**: Gather all approved feedback and insights
+3. **Sheets Update**: Clear and populate both data tabs
+4. **Timestamp Update**: Mark export completion
+5. **Logging**: Record export results
 
-### Workflow 3: Insight Synthesis
-1. **Create New Workflow** named "Feedback-Insight-Synthesis"
-2. **Add Schedule Trigger** (daily, after export)
-3. **Add Database Query Node** (aggregate by tags)
-4. **Add HTTP Request Node (LLM Synthesis)** for insights
-5. **Add Google Sheets Node (Write to AI_Insights)**
-6. **Test and Activate Workflow**
+### Admin Controls
+- **Automation Dashboard**: View all task statuses and logs
+- **Manual Triggers**: Force-run any automation task
+- **Schedule Configuration**: Adjust timing of automated tasks
+- **Error Monitoring**: View and resolve automation failures
 
-## Migration Strategy
+## Environment Variables Required
 
-### Phase 1: Database Setup
-- Create new database schema
-- Migrate existing Google Sheets data to database
-- Update API routes to use database instead of Google Sheets
-- Maintain Google Sheets fallback during transition
+```
+# Gemini AI
+GEMINI_API_KEY=your_gemini_api_key
 
-### Phase 2: Performance Optimization
-- Remove Google Sheets dependencies from real-time operations
-- Implement database indexing
-- Add connection pooling if needed
+# Google Sheets
+GOOGLE_SHEETS_PRIVATE_KEY=your_service_account_private_key
+GOOGLE_SHEETS_CLIENT_EMAIL=your_service_account_email
+GOOGLE_SHEETS_SHEET_ID=your_google_sheet_id
 
-### Phase 3: Export Integration
-- Set up n8n workflows for Google Sheets export
-- Configure automated insights generation
-- Decommission direct Google Sheets integration from app
+# Database
+DATABASE_URL=your_database_connection_string
+
+# Admin
+ADMIN_PASSWORD=your_admin_password
+
+# Application
+NEXT_PUBLIC_APP_URL=your_app_url
+CRON_SECRET=your_cron_protection_secret
+```
 
 ## Success Metrics
 
@@ -316,6 +333,8 @@ Columns:
 - **API Response Time**: <200ms for 95% of requests
 - **Page Load Time**: <1 second for feedback board
 - **Real-time Updates**: Vote changes visible within 500ms
+- **AI Processing Time**: <30 seconds for tag generation per feedback item
+- **Automation Reliability**: 99% success rate for scheduled tasks
 
 ### Existing Metrics
 - **Feedback Submission Rate**: Target 10+ submissions per week after 2 weeks of launch
@@ -323,18 +342,41 @@ Columns:
 - **Admin Moderation Time**: <24 hours from submission to approval/rejection
 - **AI Tagging Accuracy**: >80% of generated tags considered relevant by admin review
 - **Insight Generation**: Generate 3-5 actionable insights per week
-- **System Reliability**: 99% uptime for both frontend and automation workflows
+- **System Reliability**: 99% uptime for both frontend and automation systems
+
+## Migration Strategy
+
+### Phase 1: Database Setup (Week 1)
+- Create new database schema with automation tables
+- Migrate existing Google Sheets data to database
+- Update API routes to use database instead of Google Sheets
+
+### Phase 2: Built-in AI System (Week 1-2)
+- Integrate Gemini AI API directly into codebase
+- Build AI tagging system with internal scheduling
+- Create insight generation system
+- Add Google Sheets export functionality
+
+### Phase 3: Admin Interface (Week 2)
+- Build automation dashboard and controls
+- Add manual trigger functionality
+- Implement monitoring and logging interfaces
+
+### Phase 4: Testing & Optimization (Week 2-3)
+- Test all automation systems thoroughly
+- Optimize AI processing performance
+- Fine-tune prompts and error handling
 
 ## Open Questions
 
-1. **Database Choice**: Start with SQLite for simplicity or go directly to PostgreSQL for scalability?
-2. **Data Migration**: How to cleanly migrate existing Google Sheets data to database?
-3. **Export Frequency**: Should Google Sheets export be real-time, hourly, or daily?
-4. **Backup Strategy**: How to backup database data reliably?
-5. **Hosting**: Where to host the database (Vercel Postgres, Railway, self-hosted)?
+1. **Scheduling Method**: Use Vercel Cron Functions or internal task queue for automation?
+2. **AI Rate Limiting**: How to handle Gemini API quotas and rate limits efficiently?
+3. **Error Recovery**: Best strategy for handling failed AI processing jobs?
+4. **Admin Notifications**: Should admins be notified of automation failures?
+5. **Data Backup**: How to backup both database and AI processing state?
 
 ---
 
-**Document Version**: 2.0  
+**Document Version**: 3.0 - Built-in AI Architecture  
 **Last Updated**: January 2025  
-**Next Review Date**: After database migration completion 
+**Next Review Date**: After built-in automation implementation 

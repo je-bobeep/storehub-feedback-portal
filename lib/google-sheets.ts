@@ -330,4 +330,111 @@ export async function testConnection(): Promise<boolean> {
     console.error('❌ Failed to connect to Google Sheets:', error)
     return false
   }
+}
+
+/**
+ * Export feedback and AI insights to Google Sheets (for automation system)
+ * This function creates/updates separate sheets for feedback and insights
+ */
+export async function exportToGoogleSheets(
+  feedbacks: Feedback[], 
+  insights: any[]
+): Promise<void> {
+  try {
+    if (!SPREADSHEET_ID) {
+      throw new Error('GOOGLE_SHEETS_SPREADSHEET_ID environment variable is required');
+    }
+    
+    console.log(`📊 Exporting ${feedbacks.length} feedback items and ${insights.length} insights to Google Sheets`);
+    
+    // Prepare feedback data for export
+    const feedbackHeaders = [
+      'ID', 'Title', 'Description', 'Category', 'Sub Category', 'Status', 
+      'Votes', 'Tags', 'Created At', 'AI Tagged At', 'Is Approved'
+    ];
+    
+    const feedbackRows = feedbacks.map(feedback => [
+      feedback.id,
+      feedback.title,
+      feedback.description,
+      feedback.category,
+      feedback.subCategory || '',
+      feedback.status,
+      feedback.votes.toString(),
+      Array.isArray(feedback.tags) ? feedback.tags.join(', ') : (feedback.tags || ''),
+      feedback.submittedAt || feedback.createdAt,
+      feedback.aiTaggedAt || '',
+      feedback.isApproved.toString()
+    ]);
+    
+    // Prepare insights data for export  
+    const insightHeaders = [
+      'Theme', 'Insight Summary', 'Priority Score', 'Feedback Count', 
+      'Sample Feedback IDs', 'Generated At', 'Exported At'
+    ];
+    
+    const insightRows = insights.map(insight => [
+      insight.theme,
+      insight.insightSummary,
+      insight.priorityScore.toString(),
+      insight.feedbackCount.toString(),
+      Array.isArray(insight.sampleFeedbackIds) ? insight.sampleFeedbackIds.join(', ') : '',
+      insight.generatedAt?.toISOString() || '',
+      new Date().toISOString() // Mark as exported now
+    ]);
+    
+    // Clear and update Feedback Analysis sheet
+    if (feedbacks.length > 0) {
+      const feedbackSheetName = 'Feedback_Analysis';
+      
+      // Clear existing data
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${feedbackSheetName}!A:Z`
+      });
+      
+      // Write headers and data
+      const feedbackData = [feedbackHeaders, ...feedbackRows];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${feedbackSheetName}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: feedbackData
+        }
+      });
+      
+      console.log(`✅ Exported ${feedbackRows.length} feedback items to ${feedbackSheetName}`);
+    }
+    
+    // Clear and update AI Insights sheet
+    if (insights.length > 0) {
+      const insightsSheetName = 'AI_Insights';
+      
+      // Clear existing data
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${insightsSheetName}!A:Z`
+      });
+      
+      // Write headers and data
+      const insightData = [insightHeaders, ...insightRows];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${insightsSheetName}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: insightData
+        }
+      });
+      
+      console.log(`✅ Exported ${insightRows.length} insights to ${insightsSheetName}`);
+    }
+    
+    console.log('🎉 Google Sheets export completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Failed to export to Google Sheets:', error);
+    throw new Error(`Google Sheets export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 } 
