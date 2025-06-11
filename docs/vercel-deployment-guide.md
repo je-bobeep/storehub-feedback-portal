@@ -1,4 +1,3 @@
-
 # Vercel Deployment Guide
 
 This guide walks you through deploying your Feedback Fusion application to Vercel for use with n8n automation workflows.

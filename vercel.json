@@ -28,14 +28,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "DATABASE_URL": "@database-url",
-    "GOOGLE_SHEETS_PRIVATE_KEY": "@google-sheets-private-key",
-    "GOOGLE_SHEETS_CLIENT_EMAIL": "@google-sheets-client-email",
-    "GOOGLE_SHEETS_ID": "@google-sheets-id",
-    "ADMIN_PASSWORD": "@admin-password",
-    "NEXTAUTH_SECRET": "@nextauth-secret",
-    "NODE_ENV": "production"
-  }
+  ]
 } 
