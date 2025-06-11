@@ -15,6 +15,10 @@ node_modules/
 .env.production
 .env.development
 .env.staging
+.env.development.local
+.env.staging.local
+.env.production.local
+
 
 # Vercel deployment artifacts
 .vercel
